@@ -29,7 +29,7 @@ const slug = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').repla
 
 (async () => {
   if (!fs.existsSync(inbox)) { console.log('No inbox folder: ' + inbox); return; }
-  const files = fs.readdirSync(inbox).filter(f => MIME[path.extname(f).toLowerCase()]).sort();
+  const files = fs.readdirSync(inbox).filter(f => MIME[path.extname(f).toLowerCase()] || /\.json$/i.test(f)).sort();
   if (!files.length) { console.log('Inbox is empty, nothing to do.'); return; }
 
   const idxFile = path.join(packsDir, 'index.json');
@@ -50,6 +50,24 @@ const slug = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').repla
   const added = [];
   for (const f of files) {
     const ext = path.extname(f).toLowerCase();
+    if (ext === '.json') { // already converted on the owner's phone (app "Send to all players")
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(inbox, f), 'utf8'));
+        const okSize = Number.isInteger(j.W) && Number.isInteger(j.H) && j.W >= 4 && j.H >= 4 && j.W <= 64 && j.H <= 64;
+        const okPal = Array.isArray(j.palette) && j.palette.length >= 1 && j.palette.length <= 36 && j.palette.every(c => /^#[0-9a-f]{6}$/i.test(c));
+        const okData = typeof j.data === 'string' && j.data.length === j.W * j.H && [...j.data].every(ch => parseInt(ch, 36) < j.palette.length);
+        if (!okSize || !okPal || !okData) throw new Error('bad picture data');
+        const names = {};
+        for (const l of ['en', 'de', 'fr']) if (j.n && typeof j.n[l] === 'string' && j.n[l].trim()) names[l] = j.n[l].trim().slice(0, 30);
+        if (!names.en) names.en = 'Picture';
+        let id = slug(names.en) || 'picture'; const id0 = id; let k = 2; while (used.has(id)) id = id0 + '-' + k++;
+        used.add(id);
+        pack.pictures.push({ id, n: names, W: j.W, H: j.H, palette: j.palette.map(c => c.toLowerCase()), data: j.data });
+        added.push(id + ' (' + j.W + 'x' + j.H + ', ' + j.palette.length + ' colors, from phone)');
+        if (!keep) fs.unlinkSync(path.join(inbox, f));
+      } catch (e) { console.log('SKIP ' + f + ': ' + e.message); }
+      continue;
+    }
     let base = path.basename(f, ext), size = 32;
     const sm = /@(\d{2})$/.exec(base); if (sm) { size = Math.max(12, Math.min(64, +sm[1])); base = base.slice(0, sm.index); }
     const [en, de, fr] = base.split('__');
