@@ -40,8 +40,8 @@ const slug = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').repla
   const m = /^pack-(\d{4})-(\d{2})$/.exec(packId);
   const pack = fs.existsSync(packFile) ? JSON.parse(fs.readFileSync(packFile, 'utf8'))
     : { id: packId, version: 0, names: m ? { en: MONTHS.en[+m[2] - 1] + ' ' + m[1], de: MONTHS.de[+m[2] - 1] + ' ' + m[1], fr: MONTHS.fr[+m[2] - 1] + ' ' + m[1] } : { en: title(packId) }, pictures: [] };
-  const used = new Set();
-  for (const e of index.packs) { const f = path.join(packsDir, e.file); if (fs.existsSync(f)) JSON.parse(fs.readFileSync(f, 'utf8')).pictures.forEach(p => used.add(p.id)); }
+  const used = new Set(), seen = new Set();
+  for (const e of index.packs) { const f = path.join(packsDir, e.file); if (fs.existsSync(f)) JSON.parse(fs.readFileSync(f, 'utf8')).pictures.forEach(p => { used.add(p.id); if (p.data) seen.add(p.data + p.palette.join()); }); }
   pack.pictures.forEach(p => used.add(p.id));
 
   const browser = await chromium.launch(), page = await browser.newPage();
@@ -60,6 +60,8 @@ const slug = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').repla
         const names = {};
         for (const l of ['en', 'de', 'fr']) if (j.n && typeof j.n[l] === 'string' && j.n[l].trim()) names[l] = j.n[l].trim().slice(0, 30);
         if (!names.en) names.en = 'Picture';
+        if (seen.has(j.data + j.palette.join().toLowerCase())) { console.log('SKIP ' + f + ': same picture already in a pack'); if (!keep) fs.unlinkSync(path.join(inbox, f)); continue; }
+        seen.add(j.data + j.palette.join().toLowerCase());
         let id = slug(names.en) || 'picture'; const id0 = id; let k = 2; while (used.has(id)) id = id0 + '-' + k++;
         used.add(id);
         pack.pictures.push({ id, n: names, W: j.W, H: j.H, palette: j.palette.map(c => c.toLowerCase()), data: j.data });
