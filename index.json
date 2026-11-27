@@ -1,3 +1,9 @@
 {
- "packs": []
+ "packs": [
+  {
+   "id": "pack-2026-11",
+   "version": 1,
+   "file": "pack-2026-11.json"
+  }
+ ]
 }
